@@ -9,6 +9,7 @@ import (
 	"github.com/skia-dev/glog"
 
 	"go.skia.org/infra/go/httputils"
+  "rsc.io/letsencrypt"
 )
 
 var (
@@ -36,5 +37,10 @@ func main() {
 	r := mux.NewRouter()
 	r.PathPrefix("/").HandlerFunc(makeResourceHandler())
 	http.Handle("/", httputils.LoggingGzipRequestResponse(r))
-	panic(http.ListenAndServe(*port, nil))
+
+  var m letsencrypt.Manager
+  if err := m.CacheFile("letsencrypt.cache"); err != nil {
+    glog.Fatal(err)
+  }
+  glog.Fatal(m.Serve())
 }
