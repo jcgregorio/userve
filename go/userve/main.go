@@ -9,16 +9,17 @@ import (
 	"github.com/skia-dev/glog"
 
 	"go.skia.org/infra/go/httputils"
-  "rsc.io/letsencrypt"
+	"rsc.io/letsencrypt"
 )
 
 var (
-	port         = flag.String("port", ":8000", "HTTP service address (e.g., ':8000')")
-	resourcesDir = flag.String("resources_dir", "", "The directory to find templates, JS, and CSS files. If blank the current directory will be used.")
+	port    = flag.String("port", ":8000", "HTTP service address (e.g., ':8000')")
+	sources = flag.String("source", "", "The directory with the static resources to serve.")
+	local   = flag.Bool("local", false, "Running locally, not on the server. If false this runs letsencrypt.")
 )
 
-func makeResourceHandler() func(http.ResponseWriter, *http.Request) {
-	fileServer := http.FileServer(http.Dir(*resourcesDir))
+func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
+	fileServer := http.FileServer(http.Dir(*sources))
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Cache-Control", "max-age=300")
 		fileServer.ServeHTTP(w, r)
@@ -27,20 +28,24 @@ func makeResourceHandler() func(http.ResponseWriter, *http.Request) {
 
 func main() {
 	flag.Parse()
-	if *resourcesDir == "" {
+	if *sources == "" {
 		var err error
-		*resourcesDir, err = os.Getwd()
+		*sources, err = os.Getwd()
 		if err != nil {
 			glog.Fatalf("Can't find working directory: %s", err)
 		}
 	}
 	r := mux.NewRouter()
-	r.PathPrefix("/").HandlerFunc(makeResourceHandler())
+	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.Handle("/", httputils.LoggingGzipRequestResponse(r))
 
-  var m letsencrypt.Manager
-  if err := m.CacheFile("letsencrypt.cache"); err != nil {
-    glog.Fatal(err)
-  }
-  glog.Fatal(m.Serve())
+	if *local {
+		glog.Fatal(http.ListenAndServe(*port, nil))
+	} else {
+		var m letsencrypt.Manager
+		if err := m.CacheFile("letsencrypt.cache"); err != nil {
+			glog.Fatal(err)
+		}
+		glog.Fatal(m.Serve())
+	}
 }
