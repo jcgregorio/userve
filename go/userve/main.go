@@ -19,7 +19,7 @@ var (
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
-	fileServer := http.FileServer(http.Dir(*sources))
+	fileServer := FileServer(*sources)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Cache-Control", "max-age=300")
 		fileServer.ServeHTTP(w, r)
