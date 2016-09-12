@@ -5,10 +5,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/fiorix/go-web/autogzip"
 	"github.com/gorilla/mux"
 	"github.com/skia-dev/glog"
-
-	"go.skia.org/infra/go/httputils"
 	"rsc.io/letsencrypt"
 )
 
@@ -26,8 +25,19 @@ func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// LoggingGzipRequestResponse records parts of the request and the response to
+// the logs and gzips responses when appropriate.
+func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		glog.Infof("Referrer: %s %s", r.URL.Path, r.Referer())
+		h.ServeHTTP(w, r)
+	}
+	return autogzip.HandleFunc(f)
+}
+
 func main() {
 	flag.Parse()
+	defer glog.Flush()
 	if *sources == "" {
 		var err error
 		*sources, err = os.Getwd()
@@ -37,7 +47,7 @@ func main() {
 	}
 	r := mux.NewRouter()
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
-	http.Handle("/", httputils.LoggingGzipRequestResponse(r))
+	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 
 	if *local {
 		glog.Fatal(http.ListenAndServe(*port, nil))
