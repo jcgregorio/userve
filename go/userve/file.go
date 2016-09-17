@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 )
 
 // Duplicate the code for http.FileServer, but add in the ability to serve HTML
@@ -27,6 +28,13 @@ func FileServer(dir string) http.Handler {
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upath := path.Join(f.dir, r.URL.Path)
 
+	if finfo, err := os.Stat(upath); err == nil && finfo.IsDir() {
+		index := strings.TrimSuffix(upath, "/") + "/index.atom"
+		if _, err := os.Stat(index); err == nil {
+			upath = index
+		}
+		w.Header().Set("Content-Type", "application/atom+xml")
+	}
 	if _, err := os.Stat(upath + ".html"); err == nil {
 		upath += ".html"
 	}
