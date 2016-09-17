@@ -25,11 +25,9 @@ func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-// LoggingGzipRequestResponse records parts of the request and the response to
-// the logs and gzips responses when appropriate.
 func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		glog.Infof("Referrer: %s %s", r.URL.Path, r.Referer())
+		glog.Infof("Request: %s %s", r.URL.Path, r.Referer())
 		h.ServeHTTP(w, r)
 	}
 	return autogzip.HandleFunc(f)
