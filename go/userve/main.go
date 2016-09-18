@@ -7,10 +7,12 @@ import (
 
 	"github.com/fiorix/go-web/autogzip"
 	"github.com/gorilla/mux"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/skia-dev/glog"
 	"rsc.io/letsencrypt"
 )
 
+// flags
 var (
 	port    = flag.String("port", ":8000", "HTTP service address (e.g., ':8000')")
 	sources = flag.String("source", "", "The directory with the static resources to serve.")
@@ -27,7 +29,7 @@ func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
 
 func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		glog.Infof("Request: %s %s", r.URL.Path, r.Referer())
+		incRef(r.URL.Path, r.Referer())
 		h.ServeHTTP(w, r)
 	}
 	return autogzip.HandleFunc(f)
@@ -36,14 +38,20 @@ func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
 func main() {
 	flag.Parse()
 	defer glog.Flush()
+	var err error
 	if *sources == "" {
-		var err error
 		*sources, err = os.Getwd()
 		if err != nil {
 			glog.Fatalf("Can't find working directory: %s", err)
 		}
 	}
+	cache, err = lru.New(5000)
+	if err != nil {
+		glog.Fatalf("Failed to initialize log cache: %s", err)
+	}
+
 	r := mux.NewRouter()
+	r.HandleFunc("/u/ref", refHandler)
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 

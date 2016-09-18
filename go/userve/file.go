@@ -32,8 +32,8 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		index := strings.TrimSuffix(upath, "/") + "/index.atom"
 		if _, err := os.Stat(index); err == nil {
 			upath = index
+			w.Header().Set("Content-Type", "application/atom+xml")
 		}
-		w.Header().Set("Content-Type", "application/atom+xml")
 	}
 	if _, err := os.Stat(upath + ".html"); err == nil {
 		upath += ".html"
