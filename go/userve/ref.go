@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"sort"
+	"strings"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/skia-dev/glog"
@@ -62,6 +63,9 @@ var (
 
 func incRef(path, referrer string) {
 	glog.Infof("Request: %s %s", path, referrer)
+	if strings.HasPrefix(referrer, "https://bitworking.org") {
+		return
+	}
 	if referrer != "" {
 		var entry cacheEntry
 		ientry, ok := cache.Get(path)
@@ -159,7 +163,6 @@ func refHandler(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	glog.Infof("%#v", summary)
 	sort.Sort(refSummarySlice(summary))
 	if err := refTemplate.Execute(w, refPageContext{
 		LoggedIn: isLoggedIn,
