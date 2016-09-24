@@ -14,9 +14,10 @@ import (
 )
 
 type MentionSource struct {
-	Links   []string
+	Targets []string
 	ID      string
 	Updated time.Time
+	Source  string
 }
 
 func ParseAtomFeed(r io.Reader) ([]MentionSource, error) {
@@ -41,9 +42,10 @@ func ParseAtomFeed(r io.Reader) ([]MentionSource, error) {
 			fmt.Errorf("Failed to parse entry timestamp: %s", err)
 		}
 		ret = append(ret, MentionSource{
-			Links:   links,
+			Targets: links,
 			ID:      entry.ID,
 			Updated: updated,
+			Source:  entry.Link.HREF,
 		})
 	}
 	return ret, nil

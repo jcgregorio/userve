@@ -48,7 +48,9 @@ func TestParseAtomFeed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, mentionSources)
 	assert.Equal(t, 3, len(mentionSources))
-	assert.Equal(t, "http://example.com", mentionSources[0].Links[0])
-	assert.Equal(t, 0, len(mentionSources[1].Links))
-	assert.Equal(t, "http://bitworking.org/news/2016/08/sample.js", mentionSources[2].Links[0])
+	assert.Equal(t, "http://example.com", mentionSources[0].Targets[0])
+	assert.Equal(t, "http://bitworking.org/news/2016/08/interial_balance", mentionSources[0].Source)
+	assert.Equal(t, 0, len(mentionSources[1].Targets))
+	assert.Equal(t, "http://bitworking.org/news/2016/08/sample.js", mentionSources[2].Targets[0])
+	assert.Equal(t, "http://bitworking.org/news/2016/08/sample.js", mentionSources[2].Targets[0])
 }
