@@ -29,8 +29,9 @@ Plan
 
   * Start with handling webmentions for the Atom feed.
   * Poll Atom feed.
-    * Look up each [link] and [updated] value in GS.
-    * If not present, or updated doesn't match, then emit webmentions and write state to GS.
+    * Look up each Source [link] and [updated] value in GS.
+    * If not present, or updated doesn't match, then emit webmentions for each Target
+      found in the Source and write state to GS.
   * Serve webmention endpoint.
     * Collect unverified webmentions.
     * Periodically verify webmentions, at which point they become untriaged webmentions.
