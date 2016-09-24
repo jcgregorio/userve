@@ -11,6 +11,11 @@ type Entry struct {
 	ID      string `xml:"id"`
 	Content string `xml:"content"`
 	Updated string `xml:"updated"`
+	Link    Link   `xml:"link"`
+}
+
+type Link struct {
+	HREF string `xml:"href,attr"`
 }
 
 func Parse(b []byte) (*Feed, error) {

@@ -29,6 +29,7 @@ const (
    <entry>
      <updated>2016-08-16T14:30:50-04:00</updated>
      <id>http://bitworking.org/news/2016/08/stuff</id>
+     <link href="http://bitworking.org/news/2016/08/stuff"/>
      <content type="html">This is stuff</content>
    </entry>
 </feed>`
@@ -43,12 +44,18 @@ func TestParse(t *testing.T) {
 	expected := Feed{
 		Entry: []Entry{
 			Entry{
-				ID:      "http://bitworking.org/news/2016/08/content2",
+				ID: "http://bitworking.org/news/2016/08/content2",
+				Link: Link{
+					HREF: "http://bitworking.org/news/2016/08/interial_balance",
+				},
 				Content: `This is the content <a href="http://example.com">`,
 				Updated: "2016-08-16T22:42:54-04:00",
 			},
 			Entry{
-				ID:      "http://bitworking.org/news/2016/08/stuff",
+				ID: "http://bitworking.org/news/2016/08/stuff",
+				Link: Link{
+					HREF: "http://bitworking.org/news/2016/08/stuff",
+				},
 				Content: "This is stuff",
 				Updated: "2016-08-16T14:30:50-04:00",
 			},
