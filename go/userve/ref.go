@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/skia-dev/glog"
@@ -45,14 +46,14 @@ var (
     </script>
   <dl>
   {{range .Summary}}
-    <dt>{{.Path}} - {{.Total}}</dt>
-    <dd>
+    <details>
+      <summary>{{.Path}} - {{.Total}}</summary>
       <ul>
         {{range $url, $count :=   .Referrers}}
         <li>{{$url}} {{$count}} </li>
         {{end}}
       </ul>
-    </dd>
+    </details>
   {{end}}
   </dl>
 </body>
@@ -86,6 +87,11 @@ func incRef(path, referrer string) {
 func init() {
 	refTemplate = template.Must(template.New("ref").Parse(refSource))
 	client = httputils.NewTimeoutClient()
+	go func() {
+		for _ = range time.Tick(time.Hour * 24) {
+			cache.Purge()
+		}
+	}()
 }
 
 type Claims struct {
@@ -138,7 +144,7 @@ func refHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	ikeys := cache.Keys()
 	summary := []*refSummary{}
-	isLoggedIn := loggedIn(r)
+	isLoggedIn := *local || loggedIn(r)
 	if isLoggedIn {
 		for _, ik := range ikeys {
 			key := ik.(string)
