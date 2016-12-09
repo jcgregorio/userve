@@ -18,6 +18,8 @@ type cacheEntry map[string]int
 
 const (
 	CLIENT_ID = "952643138919-jh0117ivtbqkc9njoh91csm7s465c4na.apps.googleusercontent.com"
+
+	NO_REFERRER = "∅"
 )
 
 var (
@@ -67,20 +69,22 @@ func incRef(path, referrer string) {
 	if strings.HasPrefix(referrer, "https://bitworking.org") {
 		return
 	}
-	if referrer != "" {
-		var entry cacheEntry
-		ientry, ok := cache.Get(path)
+	var entry cacheEntry
+	ientry, ok := cache.Get(path)
+	if !ok {
+		entry = cacheEntry{}
+		cache.Add(path, entry)
+	} else {
+		entry, ok = ientry.(cacheEntry)
 		if !ok {
-			entry = cacheEntry{}
-			cache.Add(path, entry)
-		} else {
-			entry, ok = ientry.(cacheEntry)
-			if !ok {
-				glog.Error("Wrong thing in cache?: %v", ientry)
-				return
-			}
+			glog.Error("Wrong thing in cache?: %v", ientry)
+			return
 		}
+	}
+	if referrer != "" {
 		entry[referrer] = entry[referrer] + 1
+	} else {
+		entry[NO_REFERRER] = entry[NO_REFERRER] + 1
 	}
 }
 
