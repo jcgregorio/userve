@@ -33,7 +33,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	glog.Infof("Path: %q", r.URL.Path)
 	if newpath, ok := f.redirects[r.URL.Path]; ok {
 		glog.Infof("redirect: %q", newpath)
-		http.Redirect(w, r, newpath, http.StatusPermanentRedirect)
+		http.Redirect(w, r, newpath, 301)
 		return
 	}
 	upath := path.Join(f.dir, r.URL.Path)
