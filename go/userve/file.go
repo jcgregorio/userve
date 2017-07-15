@@ -31,12 +31,12 @@ func FileServer(dir string, redirects map[string]string) http.Handler {
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	glog.Infof("Path: %q", r.URL.Path)
-	upath := path.Join(f.dir, r.URL.Path)
 	if newpath, ok := f.redirects[r.URL.Path]; ok {
-		glog.Infof("NewPath: %q", newpath)
-		upath = path.Join(f.dir, newpath)
+		glog.Infof("redirect: %q", newpath)
+		http.Redirect(w, r, newpath, http.StatusPermanentRedirect)
+		return
 	}
-
+	upath := path.Join(f.dir, r.URL.Path)
 	if finfo, err := os.Stat(upath); err == nil && finfo.IsDir() {
 		index := strings.TrimSuffix(upath, "/") + "/index.atom"
 		if _, err := os.Stat(index); err == nil {
