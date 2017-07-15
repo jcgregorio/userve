@@ -79,7 +79,7 @@ func main() {
 		glog.Fatal(http.ListenAndServe(*port, nil))
 	} else {
 		var m letsencrypt.Manager
-		if err := m.CacheFile("letsencrypt.cache"); err != nil {
+		if err := m.CacheFile("/home/jcgregorio/letsencrypt.cache"); err != nil {
 			glog.Fatal(err)
 		}
 		glog.Fatal(m.Serve())
