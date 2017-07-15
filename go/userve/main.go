@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/fiorix/go-web/autogzip"
 	"github.com/gorilla/mux"
@@ -14,13 +16,31 @@ import (
 
 // flags
 var (
-	port    = flag.String("port", ":8000", "HTTP service address (e.g., ':8000')")
-	sources = flag.String("source", "", "The directory with the static resources to serve.")
-	local   = flag.Bool("local", false, "Running locally, not on the server. If false this runs letsencrypt.")
+	port         = flag.String("port", ":8000", "HTTP service address (e.g., ':8000')")
+	sources      = flag.String("source", "", "The directory with the static resources to serve.")
+	local        = flag.Bool("local", false, "Running locally, not on the server. If false this runs letsencrypt.")
+	redirectFile = flag.String("redirect_file", "", "File of redirects, source and destination URL paths.")
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
-	fileServer := FileServer(*sources)
+	redir := map[string]string{}
+	if *redirectFile != "" {
+		b, err := ioutil.ReadFile(*redirectFile)
+		if err != nil {
+			glog.Errorf("Failed to read redirects file: %s", err)
+		}
+		lines := strings.Split(string(b), "\n")
+		for _, line := range lines {
+			parts := strings.Split(line, " ")
+			if len(parts) != 2 {
+				glog.Errorf("Failed to get redirect with just two parts: %v", parts)
+				continue
+			}
+			redir[parts[0]] = parts[1]
+		}
+	}
+	glog.Infof("Launching with %d redirects.", len(redir))
+	fileServer := FileServer(*sources, redir)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Cache-Control", "max-age=300")
 		fileServer.ServeHTTP(w, r)
