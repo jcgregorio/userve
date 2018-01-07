@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/skia-dev/glog"
+	"go.skia.org/infra/go/ds"
 	"rsc.io/letsencrypt"
 )
 
@@ -69,6 +70,8 @@ func main() {
 	if err != nil {
 		glog.Fatalf("Failed to initialize log cache: %s", err)
 	}
+
+	ds.Init("heroic-muse-88515", "blog")
 
 	r := mux.NewRouter()
 	r.HandleFunc("/u/ref", refHandler)
