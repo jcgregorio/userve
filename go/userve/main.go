@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -26,6 +27,19 @@ var (
 	sources      = flag.String("source", "", "The directory with the static resources to serve.")
 	local        = flag.Bool("local", false, "Running locally, not on the server. If false this runs letsencrypt.")
 	redirectFile = flag.String("redirect_file", "", "File of redirects, source and destination URL paths.")
+)
+
+var (
+	mentionsTemplate = template.Must(template.New("mentions").Parse(`
+	<section>
+	<h3>WebMentions</h3>
+	<ul>
+	{{ range . }}
+    <a href="{{ .Source }}" rel=nofollow>{{ .Source }}</a>
+	{{ end }}
+	</ul>
+	</section>
+`))
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
@@ -60,6 +74,16 @@ func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
 		h.ServeHTTP(w, r)
 	}
 	return autogzip.HandleFunc(f)
+}
+
+func mentionsHandler(w http.ResponseWriter, r *http.Request) {
+	m := mention.GetGood(r.Context(), r.Referer())
+	if len(m) == 0 {
+		return
+	}
+	if err := mentionsTemplate.Execute(w, m); err != nil {
+		glog.Errorf("Failed to expand template: %s", err)
+	}
 }
 
 func webmentionHandler(w http.ResponseWriter, r *http.Request) {
@@ -127,12 +151,13 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/u/ref", refHandler)
 	r.HandleFunc("/u/webmention", webmentionHandler)
+
+	r.HandleFunc("/u/mentions", mentionsHandler)
 	// TODO Endpoint with the latest.
-	// TODO Endpoint that serves HTML of all approved.
+	// TODO Endpoint that serves HTML of all approved for a given url.
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 
-	// TODO Routine that monitors Atom feed and sends webmentions.
 	// TODO Also do login and handle comments.
 
 	if *local {
