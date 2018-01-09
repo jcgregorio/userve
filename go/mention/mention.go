@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"go.skia.org/infra/go/ds"
@@ -21,8 +22,78 @@ import (
 )
 
 const (
-	MENTIONS ds.Kind = "Mentions"
+	MENTIONS         ds.Kind = "Mentions"
+	WEB_MENTION_SENT ds.Kind = "WebMentionSent"
 )
+
+type WebMentionSent struct {
+	TS time.Time
+}
+
+func sent(source string) (time.Time, bool) {
+	key := ds.NewKey(WEB_MENTION_SENT)
+	key.Name = source
+
+	dst := &WebMentionSent{}
+	if err := ds.DS.Get(context.Background(), key, dst); err != nil {
+		return time.Time{}, false
+	} else {
+		return dst.TS, true
+	}
+}
+
+func recordSent(source string) error {
+	key := ds.NewKey(WEB_MENTION_SENT)
+	key.Name = source
+
+	src := &WebMentionSent{
+		TS: time.Now().UTC(),
+	}
+	_, err := ds.DS.Put(context.Background(), key, src)
+	return err
+}
+
+func ProcessAtomFeed(c *http.Client, filename string) error {
+	glog.Info("Processing Atom Feed")
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer util.Close(f)
+	mentionSources, err := ParseAtomFeed(f)
+	if err != nil {
+		return err
+	}
+	wmc := webmention.New(c)
+	for source, ms := range mentionSources {
+		if ts, ok := sent(source); ok && !ms.Updated.After(ts) {
+			glog.Infof("Skipping since already sent: %s", source)
+			continue
+		}
+		glog.Infof("Processing Source: %s", source)
+		for _, target := range ms.Targets {
+			glog.Infof("  to Target: %s", target)
+			endpoint, err := wmc.DiscoverEndpoint(target)
+			if err != nil {
+				glog.Errorf("Failed looking for endpoint: %s", err)
+				continue
+			} else if endpoint == "" {
+				glog.Infof("No webmention support at: %s", target)
+				continue
+			}
+			_, err = wmc.SendWebmention(endpoint, source, target)
+			if err != nil {
+				glog.Errorf("Error sending webmention to %s: %s", target, err)
+			} else {
+				glog.Infof("Sent webmention from %s to %s", source, target)
+			}
+		}
+		if err := recordSent(source); err != nil {
+			glog.Errorf("Failed recording Sent state: %s", err)
+		}
+	}
+	return nil
+}
 
 type MentionSource struct {
 	Targets []string

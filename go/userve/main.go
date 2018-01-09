@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -82,6 +83,27 @@ func StartMentionRoutine(c *http.Client) {
 	}
 }
 
+func StartAtomMonitor(c *http.Client) {
+	lastModified := time.Time{}
+	filename := path.Join(*sources, "news", "feed", "index.atom")
+	for _ = range time.Tick(time.Minute) {
+		glog.Info("Checking Atom Feed")
+		st, err := os.Stat(filename)
+		if err != nil {
+			glog.Errorf("Failed to stat Atom feed: %s", err)
+			continue
+		}
+		if st.ModTime().After(lastModified) {
+			lastModified = st.ModTime()
+			if err := mention.ProcessAtomFeed(c, filename); err != nil {
+				glog.Errorf("Failed to process Atom feed: %s", err)
+			}
+		} else {
+			glog.Info("Atom Feed Unmodified.")
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
 	defer glog.Flush()
@@ -100,6 +122,7 @@ func main() {
 	ds.Init("heroic-muse-88515", "blog")
 	c := httputils.NewTimeoutClient()
 	go StartMentionRoutine(c)
+	go StartAtomMonitor(c)
 
 	r := mux.NewRouter()
 	r.HandleFunc("/u/ref", refHandler)
@@ -108,6 +131,9 @@ func main() {
 	// TODO Endpoint that serves HTML of all approved.
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
+
+	// TODO Routine that monitors Atom feed and sends webmentions.
+	// TODO Also do login and handle comments.
 
 	if *local {
 		glog.Fatal(http.ListenAndServe(*port, nil))
