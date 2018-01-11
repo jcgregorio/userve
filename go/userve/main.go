@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,39 @@ var (
 	</ul>
 	</section>
 `))
+
+	triageTemplate *template.Template
+	triageSource   = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=egde,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-signin-scope" content="profile email">
+    <meta name="google-signin-client_id" content="%s">
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+</head>
+<body>
+  <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+    <script>
+      function onSignIn(googleUser) {
+        document.cookie = "id_token=" + googleUser.getAuthResponse().id_token;
+        if (!{{.IsAdmin}}) {
+          window.location.reload();
+        }
+      };
+    </script>
+  <ul>
+  {{range .Mentions }}
+	  <li>
+		  <a href="{{ .Source }}">{{ .Source }}</a>  <a href="{{ .Target }}">{{ .Target }}<a/> {{ .State }}
+	  </li>
+  {{end}}
+  </ul>
+</body>
+</html>
+`)
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
@@ -128,6 +162,44 @@ func StartAtomMonitor(c *http.Client) {
 	}
 }
 
+type triageContext struct {
+	IsAdmin  bool
+	Mentions []*mention.Mention
+}
+
+func triageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	context := &triageContext{}
+	isAdmin := *local || isAdmin(r)
+	if isAdmin {
+		limitText := r.FormValue("limit")
+		if limitText == "" {
+			limitText = "20"
+		}
+		offsetText := r.FormValue("offset")
+		if offsetText == "" {
+			offsetText = "0"
+		}
+		limit, err := strconv.ParseInt(limitText, 10, 32)
+		if err != nil {
+			glog.Errorf("Failed to parse limit: %s", err)
+			return
+		}
+		offset, err := strconv.ParseInt(offsetText, 10, 32)
+		if err != nil {
+			glog.Errorf("Failed to parse offset: %s", err)
+			return
+		}
+		context = &triageContext{
+			IsAdmin:  isAdmin,
+			Mentions: mention.GetTriage(r.Context(), int(limit), int(offset)),
+		}
+	}
+	if err := triageTemplate.Execute(w, context); err != nil {
+		glog.Errorf("Failed to render triage template: %s", err)
+	}
+}
+
 func main() {
 	flag.Parse()
 	defer glog.Flush()
@@ -137,7 +209,9 @@ func main() {
 		if err != nil {
 			glog.Fatalf("Can't find working directory: %s", err)
 		}
+
 	}
+	triageTemplate = template.Must(template.New("triage").Parse(triageSource))
 	cache, err = lru.New(5000)
 	if err != nil {
 		glog.Fatalf("Failed to initialize log cache: %s", err)
@@ -153,8 +227,8 @@ func main() {
 	r.HandleFunc("/u/webmention", webmentionHandler)
 
 	r.HandleFunc("/u/mentions", mentionsHandler)
+	r.HandleFunc("/u/triage", triageHandler)
 	// TODO Endpoint with the latest.
-	// TODO Endpoint that serves HTML of all approved for a given url.
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 

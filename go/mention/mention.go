@@ -243,6 +243,26 @@ func GetGood(ctx context.Context, target string) []*Mention {
 	return get(ctx, target, false)
 }
 
+func GetTriage(ctx context.Context, limit, offset int) []*Mention {
+	ret := []*Mention{}
+	q := ds.NewQuery(MENTIONS).Order("-TS").Limit(limit).Offset(offset)
+
+	it := ds.DS.Run(ctx, q)
+	for {
+		m := &Mention{}
+		_, err := it.Next(m)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			glog.Errorf("Failed while reading: %s", err)
+			break
+		}
+		ret = append(ret, m)
+	}
+	return ret
+}
+
 func GetQueued(ctx context.Context) []*Mention {
 	ret := []*Mention{}
 	q := ds.NewQuery(MENTIONS).

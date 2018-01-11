@@ -99,11 +99,13 @@ func init() {
 }
 
 type Claims struct {
-	Mail string `json:"email"`
-	Aud  string `json:"aud"`
+	Mail    string `json:"email"`
+	Aud     string `json:"aud"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
 }
 
-func loggedIn(r *http.Request) bool {
+func isAdmin(r *http.Request) bool {
 	idtoken, err := r.Cookie("id_token")
 	if err != nil {
 		glog.Info("Cookie not set.")
@@ -134,8 +136,8 @@ type refSummary struct {
 }
 
 type refPageContext struct {
-	LoggedIn bool
-	Summary  []*refSummary
+	IsAdmin bool
+	Summary []*refSummary
 }
 
 type refSummarySlice []*refSummary
@@ -148,8 +150,8 @@ func refHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	ikeys := cache.Keys()
 	summary := []*refSummary{}
-	isLoggedIn := *local || loggedIn(r)
-	if isLoggedIn {
+	isAdmin := *local || isAdmin(r)
+	if isAdmin {
 		for _, ik := range ikeys {
 			key := ik.(string)
 			irefs, ok := cache.Get(ik)
@@ -175,8 +177,8 @@ func refHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(refSummarySlice(summary))
 	if err := refTemplate.Execute(w, refPageContext{
-		LoggedIn: isLoggedIn,
-		Summary:  summary,
+		IsAdmin: isAdmin,
+		Summary: summary,
 	}); err != nil {
 		glog.Errorf("Failed to render ref template: %s", err)
 	}
