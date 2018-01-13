@@ -130,9 +130,9 @@ func ParseAtomFeed(r io.Reader) (map[string]*MentionSource, error) {
 }
 
 const (
-	GOOD_STATE   = "good"
-	QUEUED_STATE = "queued"
-	SPAM_STATE   = "spam"
+	GOOD_STATE      = "good"
+	UNTRIAGED_STATE = "untriaged"
+	SPAM_STATE      = "spam"
 )
 
 type Mention struct {
@@ -146,7 +146,7 @@ func New(source, target string) *Mention {
 	return &Mention{
 		Source: source,
 		Target: target,
-		State:  QUEUED_STATE,
+		State:  UNTRIAGED_STATE,
 		TS:     time.Now(),
 	}
 }
@@ -266,7 +266,7 @@ func GetTriage(ctx context.Context, limit, offset int) []*Mention {
 func GetQueued(ctx context.Context) []*Mention {
 	ret := []*Mention{}
 	q := ds.NewQuery(MENTIONS).
-		Filter("State =", QUEUED_STATE)
+		Filter("State =", UNTRIAGED_STATE)
 
 	it := ds.DS.Run(ctx, q)
 	for {

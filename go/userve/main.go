@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	units "github.com/docker/go-units"
 	"github.com/fiorix/go-web/autogzip"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
@@ -53,6 +54,15 @@ var (
     <meta name="google-signin-scope" content="profile email">
     <meta name="google-signin-client_id" content="%s">
     <script src="https://apis.google.com/js/platform.js" async defer></script>
+		<style type="text/css" media="screen">
+		  .webmentions {
+				display: grid;
+				padding: 1em;
+				grid-template-columns: 5em 1fr 1fr 1fr;
+				grid-column-gap: 10px;
+				grid-row-gap: 6px;
+			}
+		</style>
 </head>
 <body>
   <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
@@ -64,13 +74,20 @@ var (
         }
       };
     </script>
-  <ul>
+  <div class=webmentions>
   {{range .Mentions }}
-	  <li>
-		  <a href="{{ .Source }}">{{ .Source }}</a>  <a href="{{ .Target }}">{{ .Target }}<a/> {{ .State }}
-	  </li>
+	<select name="text">
+		<option value="good" {{if eq .State "good" }}selected{{ end }} >Good</option>
+		<option value="spam" {{if eq .State "spam" }}selected{{ end }} >Spam</option>
+		<option value="untriaged" {{if eq .State "untriaged" }}selected{{ end }} >Untriaged</option>
+	</select>
+		   <a href="{{ .Source }}">{{ .Source }}</a>  <a href="{{ .Target }}">{{ .Target }}</a><span>{{ .TS | humanTime }}</span>
   {{end}}
-  </ul>
+  </div>
+	<script type="text/javascript" charset="utf-8">
+	 // TODO - listen on div.webmentions for click/input and then write
+	 // triage action back to server.
+	</script>
 </body>
 </html>
 `)
@@ -211,7 +228,11 @@ func main() {
 		}
 
 	}
-	triageTemplate = template.Must(template.New("triage").Parse(triageSource))
+	triageTemplate = template.Must(template.New("triage").Funcs(template.FuncMap{
+		"humanTime": func(t time.Time) string {
+			return units.HumanDuration(time.Now().Sub(t)) + " ago."
+		},
+	}).Parse(triageSource))
 	cache, err = lru.New(5000)
 	if err != nil {
 		glog.Fatalf("Failed to initialize log cache: %s", err)
