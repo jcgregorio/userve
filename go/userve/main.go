@@ -87,6 +87,7 @@ var (
 		<span>{{ .TS | humanTime }}</span>
   {{end}}
   </div>
+	<div><a href="/u/triage?offset={{.Offset}}">Next</a></div>
 	<script type="text/javascript" charset="utf-8">
 	 // TODO - listen on div.webmentions for click/input and then write
 	 // triage action back to server.
@@ -150,7 +151,7 @@ type UpdateMention struct {
 	Value string `json:"value"`
 }
 
-func updateMentionHandler(w http.ResponseWriter, r *http.Request) {
+func updateTriageHandler(w http.ResponseWriter, r *http.Request) {
 	var u UpdateMention
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		glog.Errorf("Failed to decode update: %s", err)
@@ -217,6 +218,7 @@ func StartAtomMonitor(c *http.Client) {
 type triageContext struct {
 	IsAdmin  bool
 	Mentions []*mention.MentionWithKey
+	Offset   int64
 }
 
 func triageHandler(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +247,7 @@ func triageHandler(w http.ResponseWriter, r *http.Request) {
 		context = &triageContext{
 			IsAdmin:  isAdmin,
 			Mentions: mention.GetTriage(r.Context(), int(limit), int(offset)),
+			Offset:   offset + limit,
 		}
 	}
 	if err := triageTemplate.Execute(w, context); err != nil {
@@ -283,9 +286,8 @@ func main() {
 	r.HandleFunc("/u/webmention", webmentionHandler)
 
 	r.HandleFunc("/u/mentions", mentionsHandler)
-	r.HandleFunc("/u/updateMention", updateMentionHandler)
 	r.HandleFunc("/u/triage", triageHandler)
-	// TODO Endpoint with the latest.
+	r.HandleFunc("/u/updateMention", updateTriageHandler)
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 
