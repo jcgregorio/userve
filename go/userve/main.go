@@ -152,6 +152,10 @@ type UpdateMention struct {
 }
 
 func updateTriageHandler(w http.ResponseWriter, r *http.Request) {
+	isAdmin := *local || isAdmin(r)
+	if !isAdmin {
+		http.Error(w, "Unauthorized", 401)
+	}
 	var u UpdateMention
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		glog.Errorf("Failed to decode update: %s", err)

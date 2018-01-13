@@ -41,7 +41,7 @@ var (
     <script>
       function onSignIn(googleUser) {
         document.cookie = "id_token=" + googleUser.getAuthResponse().id_token;
-        if (!{{.LoggedIn}}) {
+        if (!{{.IsAdmin}}) {
           window.location.reload();
         }
       };
