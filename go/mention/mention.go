@@ -319,6 +319,7 @@ func GetQueued(ctx context.Context) []*Mention {
 }
 
 func Put(ctx context.Context, mention *Mention) error {
+	// TODO See if there's an existing mention already, so we don't overwrite its status?
 	key := ds.NewKey(MENTIONS)
 	key.Name = mention.key()
 	if _, err := ds.DS.Put(ctx, key, mention); err != nil {
