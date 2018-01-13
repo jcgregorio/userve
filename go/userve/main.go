@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -55,7 +56,7 @@ var (
     <meta name="google-signin-client_id" content="%s">
     <script src="https://apis.google.com/js/platform.js" async defer></script>
 		<style type="text/css" media="screen">
-		  .webmentions {
+		  #webmentions {
 				display: grid;
 				padding: 1em;
 				grid-template-columns: 5em 1fr 1fr 1fr;
@@ -74,19 +75,36 @@ var (
         }
       };
     </script>
-  <div class=webmentions>
+  <div id=webmentions>
   {{range .Mentions }}
-	<select name="text">
-		<option value="good" {{if eq .State "good" }}selected{{ end }} >Good</option>
-		<option value="spam" {{if eq .State "spam" }}selected{{ end }} >Spam</option>
-		<option value="untriaged" {{if eq .State "untriaged" }}selected{{ end }} >Untriaged</option>
-	</select>
-		   <a href="{{ .Source }}">{{ .Source }}</a>  <a href="{{ .Target }}">{{ .Target }}</a><span>{{ .TS | humanTime }}</span>
+		<select name="text" data-key="{{ .Key }}">
+			<option value="good" {{if eq .State "good" }}selected{{ end }} >Good</option>
+			<option value="spam" {{if eq .State "spam" }}selected{{ end }} >Spam</option>
+			<option value="untriaged" {{if eq .State "untriaged" }}selected{{ end }} >Untriaged</option>
+		</select>
+		<a href="{{ .Source }}">{{ .Source }}</a>
+		<a href="{{ .Target }}">{{ .Target }}</a>
+		<span>{{ .TS | humanTime }}</span>
   {{end}}
   </div>
 	<script type="text/javascript" charset="utf-8">
 	 // TODO - listen on div.webmentions for click/input and then write
 	 // triage action back to server.
+	 document.getElementById('webmentions').addEventListener('change', e => {
+		 console.log(e);
+		 if (e.target.dataset.key != "") {
+			 fetch("/u/updateMention", {
+				 method: 'POST',
+				 body: JSON.stringify({
+					 key: e.target.dataset.key,
+					 value:  e.target.value,
+				 }),
+				 headers: new Headers({
+					 'Content-Type': 'application/json'
+				 })
+			 }).catch(e => console.error('Error:', e));
+		 }
+	 });
 	</script>
 </body>
 </html>
@@ -125,6 +143,23 @@ func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
 		h.ServeHTTP(w, r)
 	}
 	return autogzip.HandleFunc(f)
+}
+
+type UpdateMention struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func updateMentionHandler(w http.ResponseWriter, r *http.Request) {
+	var u UpdateMention
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		glog.Errorf("Failed to decode update: %s", err)
+		http.Error(w, "Bad JSON", 400)
+	}
+	if err := mention.UpdateState(r.Context(), u.Key, u.Value); err != nil {
+		glog.Errorf("Failed to write update: %s", err)
+		http.Error(w, "Failed to write", 400)
+	}
 }
 
 func mentionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +216,7 @@ func StartAtomMonitor(c *http.Client) {
 
 type triageContext struct {
 	IsAdmin  bool
-	Mentions []*mention.Mention
+	Mentions []*mention.MentionWithKey
 }
 
 func triageHandler(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +283,7 @@ func main() {
 	r.HandleFunc("/u/webmention", webmentionHandler)
 
 	r.HandleFunc("/u/mentions", mentionsHandler)
+	r.HandleFunc("/u/updateMention", updateMentionHandler)
 	r.HandleFunc("/u/triage", triageHandler)
 	// TODO Endpoint with the latest.
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())

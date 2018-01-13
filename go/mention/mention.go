@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"cloud.google.com/go/datastore"
 	"go.skia.org/infra/go/ds"
 	"go.skia.org/infra/go/util"
 	"google.golang.org/api/iterator"
@@ -243,14 +244,44 @@ func GetGood(ctx context.Context, target string) []*Mention {
 	return get(ctx, target, false)
 }
 
-func GetTriage(ctx context.Context, limit, offset int) []*Mention {
-	ret := []*Mention{}
+func UpdateState(ctx context.Context, encodedKey, state string) error {
+	tx, err := ds.DS.NewTransaction(ctx)
+	if err != nil {
+		return fmt.Errorf("client.NewTransaction: %v", err)
+	}
+	key, err := datastore.DecodeKey(encodedKey)
+	if err != nil {
+		return fmt.Errorf("Unable to decode key: %s", err)
+	}
+	var m Mention
+	if err := tx.Get(key, &m); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("tx.GetMulti: %v", err)
+	}
+	m.State = state
+	if _, err := tx.Put(key, &m); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("tx.Put: %v", err)
+	}
+	if _, err = tx.Commit(); err != nil {
+		return fmt.Errorf("tx.Commit: %v", err)
+	}
+	return nil
+}
+
+type MentionWithKey struct {
+	Mention
+	Key string
+}
+
+func GetTriage(ctx context.Context, limit, offset int) []*MentionWithKey {
+	ret := []*MentionWithKey{}
 	q := ds.NewQuery(MENTIONS).Order("-TS").Limit(limit).Offset(offset)
 
 	it := ds.DS.Run(ctx, q)
 	for {
-		m := &Mention{}
-		_, err := it.Next(m)
+		var m Mention
+		key, err := it.Next(&m)
 		if err == iterator.Done {
 			break
 		}
@@ -258,7 +289,10 @@ func GetTriage(ctx context.Context, limit, offset int) []*Mention {
 			glog.Errorf("Failed while reading: %s", err)
 			break
 		}
-		ret = append(ret, m)
+		ret = append(ret, &MentionWithKey{
+			Mention: m,
+			Key:     key.Encode(),
+		})
 	}
 	return ret
 }
