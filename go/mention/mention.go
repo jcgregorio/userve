@@ -37,8 +37,10 @@ func sent(source string) (time.Time, bool) {
 
 	dst := &WebMentionSent{}
 	if err := ds.DS.Get(context.Background(), key, dst); err != nil {
+		glog.Warningf("Failed to find source: %q", source)
 		return time.Time{}, false
 	} else {
+		glog.Warningf("Found source: %q", source)
 		return dst.TS, true
 	}
 }
@@ -67,7 +69,9 @@ func ProcessAtomFeed(c *http.Client, filename string) error {
 	}
 	wmc := webmention.New(c)
 	for source, ms := range mentionSources {
-		if ts, ok := sent(source); ok && !ms.Updated.After(ts) {
+		ts, ok := sent(source)
+		glog.Warningf("Updated: %v  ts: %v ok: %v", ms.Updated, ts, ok)
+		if ok && !ms.Updated.After(ts) {
 			glog.Infof("Skipping since already sent: %s", source)
 			continue
 		}
