@@ -70,7 +70,7 @@ func ProcessAtomFeed(c *http.Client, filename string) error {
 	wmc := webmention.New(c)
 	for source, ms := range mentionSources {
 		ts, ok := sent(source)
-		glog.Warningf("Updated: %v  ts: %v ok: %v", ms.Updated, ts, ok)
+		glog.Warningf("Updated: %v  ts: %v ok: %v", ms.Updated.Unix(), ts.Unix(), ok)
 		if ok && !ms.Updated.After(ts) {
 			glog.Infof("Skipping since already sent: %s", source)
 			continue
