@@ -108,8 +108,7 @@ var (
 	 });
 	</script>
 </body>
-</html>
-`)
+</html>`, CLIENT_ID)
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
