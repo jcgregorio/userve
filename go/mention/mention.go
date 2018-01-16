@@ -388,7 +388,7 @@ func findHEntry(ctx context.Context, u2r UrlToImageReader, m *Mention, items []*
 	for _, it := range items {
 		if in("h-entry", it.Type) {
 			entryURL := firstPropAsString(it, "url")
-			if entryURL != m.Source {
+			if entryURL != "" && entryURL != m.Source {
 				return
 			}
 			m.Title = firstPropAsString(it, "name")
