@@ -3,11 +3,18 @@ package mention
 import (
 	"bytes"
 	"context"
+	"io"
+	"net/url"
+	"os"
 	"testing"
 	"time"
 
+	_ "image/gif"
+	_ "image/jpeg"
+
 	"github.com/stretchr/testify/assert"
 	"go.skia.org/infra/go/ds/testutil"
+	"willnorris.com/go/microformats"
 )
 
 const (
@@ -91,4 +98,49 @@ func TestDB(t *testing.T) {
 
 	m := GetGood(context.Background(), "https://bitworking.org/bar")
 	assert.Len(t, m, 2)
+}
+
+func TestParseMicroformats(t *testing.T) {
+	raw := `<article class="post h-entry" itemscope="" itemtype="http://schema.org/BlogPosting">
+
+	<header class="post-header">
+	<h1 class="post-title p-name" itemprop="name headline">WebMention Only</h1>
+	<p class="post-meta">
+	<a class="u-url" href="/news/2018/01/webmention-only">
+	<time datetime="2018-01-13T00:00:00-05:00" itemprop="datePublished" class="dt-published">
+
+	Jan 13, 2018
+	</time>
+	</a>
+	• <a rel="author" class="p-author h-card" href="/about"> <span itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+	<img class="u-photo" src="/images/joe2016.jpg" alt="" style="height: 16px; border-radius: 8px; margin-right: 4px;">
+	<span itemprop="name">Joe Gregorio</span></span></a>
+	</p>
+	</header>
+
+	<div class="post-content e-content" itemprop="articleBody">
+	<p><a href="https://allinthehead.com/retro/378/implementing-webmentions">Drew McLellan has gone WebMention-only.</a></p>
+
+	<p>It’s an interesting idea, though I will still probably build a comment system
+	for this blog and replace Disqus.</p>
+
+	</div>
+	<div id="mentions"></div>
+</article>`
+
+	reader := bytes.NewReader([]byte(raw))
+	u, err := url.Parse("https://bitworking.org/news/2018/01/webmention-only")
+	assert.NoError(t, err)
+	data := microformats.Parse(reader, u)
+	m := &Mention{
+		Source: "https://bitworking.org/news/2018/01/webmention-only",
+	}
+	urlToImageReader := func(url string) (io.ReadCloser, error) {
+		return os.Open("./testdata/author_image.jpg")
+	}
+	findHEntry(context.Background(), urlToImageReader, m, data.Items)
+	assert.Equal(t, "Joe Gregorio", m.Author)
+	assert.Equal(t, "https://bitworking.org/about", m.AuthorURL)
+	assert.Equal(t, "2018-01-13 00:00:00 -0500 EST", m.Published.String())
+	assert.Equal(t, "f3f799d1a61805b5ee2ccb5cf0aebafa", m.Thumbnail)
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -16,15 +18,18 @@ import (
 	"go.skia.org/infra/go/ds"
 	"go.skia.org/infra/go/util"
 	"google.golang.org/api/iterator"
+	"willnorris.com/go/microformats"
 	"willnorris.com/go/webmention"
 
 	"github.com/jcgregorio/userve/go/atom"
+	"github.com/nfnt/resize"
 	"github.com/skia-dev/glog"
 )
 
 const (
 	MENTIONS         ds.Kind = "Mentions"
 	WEB_MENTION_SENT ds.Kind = "WebMentionSent"
+	THUMBNAIL        ds.Kind = "Thumbnail"
 )
 
 type WebMentionSent struct {
@@ -145,6 +150,13 @@ type Mention struct {
 	Target string
 	State  string
 	TS     time.Time
+
+	// Metadata found when validating. We might display this.
+	Title     string    `datastore:",noindex"`
+	Author    string    `datastore:",noindex"`
+	AuthorURL string    `datastore:",noindex"`
+	Published time.Time `datastore:",noindex"`
+	Thumbnail string    `datastore:",noindex"`
 }
 
 func New(source, target string) *Mention {
@@ -189,16 +201,36 @@ func (m *Mention) SlowValidate(c *http.Client) error {
 		return fmt.Errorf("Failed to retrieve source: %s", err)
 	}
 	defer util.Close(resp.Body)
-	links, err := webmention.DiscoverLinksFromReader(resp.Body, m.Source, "")
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read content: %s", err)
+	}
+	reader := bytes.NewReader(b)
+	links, err := webmention.DiscoverLinksFromReader(reader, m.Source, "")
 	if err != nil {
 		return fmt.Errorf("Failed to discover links: %s", err)
 	}
 	for _, link := range links {
 		if link == m.Target {
+			_, err := reader.Seek(0, io.SeekStart)
+			if err != nil {
+				return nil
+			}
+			m.ParseMicroformats(reader, MakeUrlToImageReader(c))
 			return nil
 		}
 	}
 	return fmt.Errorf("Failed to find target link in source.")
+}
+
+func (m *Mention) ParseMicroformats(r io.Reader, urlToImageReader UrlToImageReader) {
+	u, err := url.Parse(m.Source)
+	if err != nil {
+		return
+	}
+	data := microformats.Parse(r, u)
+	findHEntry(context.Background(), urlToImageReader, m, data.Items)
+	// Find an h-entry with the m.Target.
 }
 
 func VerifyQueuedMentions(c *http.Client) {
@@ -330,4 +362,114 @@ func Put(ctx context.Context, mention *Mention) error {
 		return fmt.Errorf("Failed writing %#v: %s", *mention, err)
 	}
 	return nil
+}
+
+type UrlToImageReader func(url string) (io.ReadCloser, error)
+
+func in(s string, arr []string) bool {
+	for _, a := range arr {
+		if a == s {
+			return true
+		}
+	}
+	return false
+}
+
+func firstPropAsString(uf *microformats.Microformat, key string) string {
+	for _, sint := range uf.Properties[key] {
+		if s, ok := sint.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func findHEntry(ctx context.Context, u2r UrlToImageReader, m *Mention, items []*microformats.Microformat) {
+	for _, it := range items {
+		if in("h-entry", it.Type) {
+			entryURL := firstPropAsString(it, "url")
+			if entryURL != m.Source {
+				return
+			}
+			m.Title = firstPropAsString(it, "name")
+			if t, err := time.Parse(time.RFC3339, firstPropAsString(it, "published")); err == nil {
+				m.Published = t
+			}
+			if authorsInt, ok := it.Properties["author"]; ok {
+				for _, authorInt := range authorsInt {
+					if author, ok := authorInt.(*microformats.Microformat); ok {
+						findAuthor(ctx, u2r, m, author)
+					}
+				}
+			}
+		}
+		findHEntry(ctx, u2r, m, it.Children)
+	}
+}
+
+type Thumbnail struct {
+	PNG []byte `datastore:",noindex"`
+}
+
+func MakeUrlToImageReader(c *http.Client) UrlToImageReader {
+	return func(u string) (io.ReadCloser, error) {
+		resp, err := c.Get(u)
+		if err != nil {
+			return nil, fmt.Errorf("Error retrieving thumbnail: %s", err)
+		}
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("Not a 200 response: %d", resp.StatusCode)
+		}
+		return resp.Body, nil
+	}
+}
+
+// TODO Should pass down context and URL resolver.
+func findAuthor(ctx context.Context, u2r UrlToImageReader, m *Mention, it *microformats.Microformat) {
+	m.Author = it.Value
+	m.AuthorURL = firstPropAsString(it, "url")
+	u := firstPropAsString(it, "photo")
+	if u == "" {
+		return
+	}
+
+	r, err := u2r(u)
+	if err != nil {
+		return
+	}
+
+	defer util.Close(r)
+	img, _, err := image.Decode(r)
+	if err != nil {
+		return
+	}
+	rect := img.Bounds()
+	var x uint = 32
+	var y uint = 32
+	if rect.Max.X > rect.Max.Y {
+		y = 0
+	} else {
+		x = 0
+	}
+	resized := resize.Resize(x, y, img, resize.Lanczos3)
+
+	var buf bytes.Buffer
+	encoder := png.Encoder{
+		CompressionLevel: png.BestCompression,
+	}
+	if err := encoder.Encode(&buf, resized); err != nil {
+		return
+	}
+
+	hash := fmt.Sprintf("%x", md5.Sum(buf.Bytes()))
+	t := &Thumbnail{
+		PNG: buf.Bytes(),
+	}
+	key := ds.NewKey(THUMBNAIL)
+	key.Name = hash
+	if _, err := ds.DS.Put(ctx, key, t); err != nil {
+		fmt.Printf("Failed to write: %s", err)
+		return
+	}
+	m.Thumbnail = hash
 }

@@ -166,6 +166,7 @@ func updateTriageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// mentionsHandler returns HTML describing all the good Webmentions for the given URL.
 func mentionsHandler(w http.ResponseWriter, r *http.Request) {
 	m := mention.GetGood(r.Context(), r.Referer())
 	if len(m) == 0 {
@@ -176,6 +177,7 @@ func mentionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// webmentionHandler handles incoming Webmentions.
 func webmentionHandler(w http.ResponseWriter, r *http.Request) {
 	m := mention.New(r.FormValue("source"), r.FormValue("target"))
 	if err := m.FastValidate(); err != nil {
@@ -224,6 +226,7 @@ type triageContext struct {
 	Offset   int64
 }
 
+// triageHandler displays the triage page for Webmentions.
 func triageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	context := &triageContext{}
@@ -286,11 +289,13 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/u/ref", refHandler)
-	r.HandleFunc("/u/webmention", webmentionHandler)
 
+	r.HandleFunc("/u/webmention", webmentionHandler)
 	r.HandleFunc("/u/mentions", mentionsHandler)
+
 	r.HandleFunc("/u/triage", triageHandler)
 	r.HandleFunc("/u/updateMention", updateTriageHandler)
+
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingGzipRequestResponse(r))
 
