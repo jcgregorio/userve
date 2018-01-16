@@ -137,10 +137,19 @@ func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func LoggingGzipRequestResponse(h http.Handler) http.HandlerFunc {
+func LoggingRequestResponse(h http.Handler) http.HandlerFunc {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		incRef(r.URL.Path, r.Referer())
 		h.ServeHTTP(w, r)
+	}
+	return f
+	//	return autogzip.HandleFunc(f)
+}
+
+func LoggingGzipRequestResponse(h http.HandlerFunc) http.HandlerFunc {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		incRef(r.URL.Path, r.Referer())
+		h(w, r)
 	}
 	return autogzip.HandleFunc(f)
 }
@@ -168,6 +177,7 @@ func updateTriageHandler(w http.ResponseWriter, r *http.Request) {
 
 // mentionsHandler returns HTML describing all the good Webmentions for the given URL.
 func mentionsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
 	m := mention.GetGood(r.Context(), r.Referer())
 	if len(m) == 0 {
 		return
@@ -296,8 +306,8 @@ func main() {
 	r.HandleFunc("/u/triage", triageHandler)
 	r.HandleFunc("/u/updateMention", updateTriageHandler)
 
-	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
-	http.HandleFunc("/", LoggingGzipRequestResponse(r))
+	r.PathPrefix("/").HandlerFunc(LoggingGzipRequestResponse(makeStaticHandler()))
+	http.HandleFunc("/", LoggingRequestResponse(r))
 
 	// TODO Also do login and handle comments.
 
