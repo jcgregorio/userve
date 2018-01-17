@@ -50,12 +50,12 @@ func sent(source string) (time.Time, bool) {
 	}
 }
 
-func recordSent(source string) error {
+func recordSent(source string, updated time.Time) error {
 	key := ds.NewKey(WEB_MENTION_SENT)
 	key.Name = source
 
 	src := &WebMentionSent{
-		TS: time.Now().UTC(),
+		TS: updated.UTC(),
 	}
 	_, err := ds.DS.Put(context.Background(), key, src)
 	return err
@@ -75,8 +75,8 @@ func ProcessAtomFeed(c *http.Client, filename string) error {
 	wmc := webmention.New(c)
 	for source, ms := range mentionSources {
 		ts, ok := sent(source)
-		glog.Warningf("Updated: %v  ts: %v ok: %v", ms.Updated.Unix(), ts.Unix(), ok)
-		if ok && !ms.Updated.After(ts) {
+		glog.Warningf("Updated: %v  ts: %v ok: %v after: %v", ms.Updated.Unix(), ts.Unix(), ok, ms.Updated.After(ts.Add(time.Second)))
+		if ok && ts.Before(ms.Updated.Add(time.Second)) {
 			glog.Infof("Skipping since already sent: %s", source)
 			continue
 		}
@@ -98,7 +98,7 @@ func ProcessAtomFeed(c *http.Client, filename string) error {
 				glog.Infof("Sent webmention from %s to %s", source, target)
 			}
 		}
-		if err := recordSent(source); err != nil {
+		if err := recordSent(source, ms.Updated); err != nil {
 			glog.Errorf("Failed recording Sent state: %s", err)
 		}
 	}

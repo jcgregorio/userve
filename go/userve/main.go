@@ -300,7 +300,7 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/u/ref", refHandler)
 
-	r.HandleFunc("/u/webmention", webmentionHandler)
+	r.HandleFunc("/u/webmention", webmentionHandler).Methods("POST")
 	r.HandleFunc("/u/mentions", mentionsHandler)
 
 	r.HandleFunc("/u/triage", triageHandler)
