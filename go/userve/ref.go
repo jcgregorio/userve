@@ -49,10 +49,10 @@ var (
   <dl>
   {{range .Summary}}
     <details>
-      <summary>{{.Path}} - {{.Total}}</summary>
+      <summary>{{.Total}} - <a href="{{.Path}}">{{.Path}}</a></summary>
       <ul>
         {{range $url, $count :=   .Referrers}}
-        <li>{{$url}} {{$count}} </li>
+        <li>{{$count}} <a href="{{$url}}">{{$url}}</a> </li>
         {{end}}
       </ul>
     </details>
