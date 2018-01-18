@@ -130,11 +130,11 @@ func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 	glog.Infof("Launching with %d redirects.", len(redir))
 	fileServer := FileServer(*sources, redir)
-	return func(w http.ResponseWriter, r *http.Request) {
+	return autogzip.HandleFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Cache-Control", "max-age=300")
 		w.Header().Add("Link", "<https://bitworking.org/u/webmention>; rel=\"webmention\"")
 		fileServer.ServeHTTP(w, r)
-	}
+	})
 }
 
 func LoggingRequestResponse(h http.Handler) http.HandlerFunc {
@@ -143,15 +143,6 @@ func LoggingRequestResponse(h http.Handler) http.HandlerFunc {
 		h.ServeHTTP(w, r)
 	}
 	return f
-	//	return autogzip.HandleFunc(f)
-}
-
-func LoggingGzipRequestResponse(h http.HandlerFunc) http.HandlerFunc {
-	f := func(w http.ResponseWriter, r *http.Request) {
-		incRef(r.URL.Path, r.Referer())
-		h(w, r)
-	}
-	return autogzip.HandleFunc(f)
 }
 
 type UpdateMention struct {
@@ -298,15 +289,14 @@ func main() {
 	go StartAtomMonitor(c)
 
 	r := mux.NewRouter()
-	r.HandleFunc("/u/ref", refHandler)
+	u := r.PathPrefix("/u").Subrouter()
+	u.HandleFunc("/ref", refHandler)
+	u.HandleFunc("/webmention", webmentionHandler).Methods("POST")
+	u.HandleFunc("/mentions", mentionsHandler)
+	u.HandleFunc("/triage", triageHandler)
+	u.HandleFunc("/updateMention", updateTriageHandler)
 
-	r.HandleFunc("/u/webmention", webmentionHandler).Methods("POST")
-	r.HandleFunc("/u/mentions", mentionsHandler)
-
-	r.HandleFunc("/u/triage", triageHandler)
-	r.HandleFunc("/u/updateMention", updateTriageHandler)
-
-	r.PathPrefix("/").HandlerFunc(LoggingGzipRequestResponse(makeStaticHandler()))
+	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingRequestResponse(r))
 
 	// TODO Also do login and handle comments.
