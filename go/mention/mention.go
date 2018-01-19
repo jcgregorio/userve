@@ -6,7 +6,10 @@ import (
 	"crypto/md5"
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
 	"image/png"
+	_ "image/png"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -236,6 +239,7 @@ func (m *Mention) ParseMicroformats(r io.Reader, urlToImageReader UrlToImageRead
 func VerifyQueuedMentions(c *http.Client) {
 	queued := GetQueued(context.Background())
 	for _, m := range queued {
+		glog.Infof("Verifying queued webmention from %q", m.Source)
 		if m.SlowValidate(c) == nil {
 			m.State = GOOD_STATE
 		} else {
@@ -424,23 +428,26 @@ func MakeUrlToImageReader(c *http.Client) UrlToImageReader {
 	}
 }
 
-// TODO Should pass down context and URL resolver.
 func findAuthor(ctx context.Context, u2r UrlToImageReader, m *Mention, it *microformats.Microformat) {
+	glog.Info("Found author in microformat.")
 	m.Author = it.Value
 	m.AuthorURL = firstPropAsString(it, "url")
 	u := firstPropAsString(it, "photo")
 	if u == "" {
+		glog.Warning("No photo URL found.")
 		return
 	}
 
 	r, err := u2r(u)
 	if err != nil {
+		glog.Warning("Failed to retrieve photo.")
 		return
 	}
 
 	defer util.Close(r)
 	img, _, err := image.Decode(r)
 	if err != nil {
+		glog.Warning("Failed to decode photo.")
 		return
 	}
 	rect := img.Bounds()
@@ -458,6 +465,7 @@ func findAuthor(ctx context.Context, u2r UrlToImageReader, m *Mention, it *micro
 		CompressionLevel: png.BestCompression,
 	}
 	if err := encoder.Encode(&buf, resized); err != nil {
+		glog.Warning("Failed to encode photo.")
 		return
 	}
 
@@ -468,7 +476,7 @@ func findAuthor(ctx context.Context, u2r UrlToImageReader, m *Mention, it *micro
 	key := ds.NewKey(THUMBNAIL)
 	key.Name = hash
 	if _, err := ds.DS.Put(ctx, key, t); err != nil {
-		fmt.Printf("Failed to write: %s", err)
+		glog.Errorf("Failed to write: %s", err)
 		return
 	}
 	m.Thumbnail = hash

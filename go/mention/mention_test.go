@@ -128,6 +128,9 @@ func TestParseMicroformats(t *testing.T) {
 	<div id="mentions"></div>
 </article>`
 
+	cleanup := testutil.InitDatastore(t, THUMBNAIL)
+	defer cleanup()
+
 	reader := bytes.NewReader([]byte(raw))
 	u, err := url.Parse("https://bitworking.org/news/2018/01/webmention-only")
 	assert.NoError(t, err)
