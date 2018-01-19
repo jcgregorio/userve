@@ -48,7 +48,7 @@ var (
 				{{ if .AuthorURL }}
 				<a href="{{ .AuthorURL}}" rel=nofollow>
 					{{ if .Thumbnail }}
-						<img src=""/>
+						<img src="/u/thumbnail/{{ .Thumbnail }}"/>
 					{{ end }}
 					{{ .Author }}
 				</a>
@@ -190,6 +190,21 @@ func updateTriageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func thumbnailHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	vars := mux.Vars(r)
+	b, err := mention.GetThumbnail(r.Context(), vars["id"])
+	if err != nil {
+		http.Error(w, "Image not found", 404)
+		glog.Errorf("Failed to get image: %s", err)
+		return
+	}
+	if _, err = w.Write(b); err != nil {
+		glog.Errorf("Failed to write image: %s", err)
+		return
+	}
+}
+
 // mentionsHandler returns HTML describing all the good Webmentions for the given URL.
 func mentionsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
@@ -319,6 +334,7 @@ func main() {
 	u.HandleFunc("/mentions", mentionsHandler)
 	u.HandleFunc("/triage", triageHandler)
 	u.HandleFunc("/updateMention", updateTriageHandler)
+	u.HandleFunc("/thumbnail/{id:[a-z0-9]+}", thumbnailHandler)
 
 	r.PathPrefix("/").HandlerFunc(makeStaticHandler())
 	http.HandleFunc("/", LoggingRequestResponse(r))

@@ -481,3 +481,14 @@ func findAuthor(ctx context.Context, u2r UrlToImageReader, m *Mention, it *micro
 	}
 	m.Thumbnail = hash
 }
+
+func GetThumbnail(ctx context.Context, id string) ([]byte, error) {
+	key := ds.NewKey(THUMBNAIL)
+	key.Name = id
+	var t Thumbnail
+	if err := ds.DS.Get(ctx, key, &t); err != nil {
+		return nil, fmt.Errorf("Failed to find image: %s", err)
+	}
+	return t.PNG, nil
+
+}
