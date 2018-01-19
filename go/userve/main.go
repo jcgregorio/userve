@@ -33,14 +33,38 @@ var (
 )
 
 var (
-	mentionsTemplate = template.Must(template.New("mentions").Parse(`
-	<section>
+	mentionsTemplate = template.Must(template.New("mentions").Funcs(template.FuncMap{
+		"humanTime": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return " • " + units.HumanDuration(time.Now().Sub(t)) + " ago"
+		},
+	}).Parse(`
+	<section id=webmention>
 	<h3>WebMentions</h3>
-	<ul>
 	{{ range . }}
-    <a href="{{ .Source }}" rel=nofollow>{{ .Source }}</a>
+	    <span class="wm-author">
+				{{ if .AuthorURL }}
+				<a href="{{ .AuthorURL}}" rel=nofollow>
+					{{ if .Thumbnail }}
+						<img src=""/>
+					{{ end }}
+					{{ .Author }}
+				</a>
+				{{ else }}
+					{{ .Author }}
+				{{ end }}
+			</span>
+			<time datetime="{{ .Published }}">{{ .Published | humanTime }}</time>
+			<a class="wm-content" href="{{ .Source }}" rel=nofollow>
+				{{ if .Title }}
+					{{ .Title }}
+				{{ else }}
+					{{ .Source }}
+				{{ end }}
+			</a>
 	{{ end }}
-	</ul>
 	</section>
 `))
 
