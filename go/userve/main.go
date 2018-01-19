@@ -40,23 +40,31 @@ var (
 			}
 			return " • " + units.HumanDuration(time.Now().Sub(t)) + " ago"
 		},
+		"rfc3999": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return t.Format(time.RFC3339)
+		},
 	}).Parse(`
 	<section id=webmention>
 	<h3>WebMentions</h3>
 	{{ range . }}
 	    <span class="wm-author">
 				{{ if .AuthorURL }}
-				<a href="{{ .AuthorURL}}" rel=nofollow>
 					{{ if .Thumbnail }}
+					<a href="{{ .AuthorURL}}" rel=nofollow class="wm-thumbnail">
 						<img src="/u/thumbnail/{{ .Thumbnail }}"/>
+					</a>
 					{{ end }}
-					{{ .Author }}
-				</a>
+					<a href="{{ .AuthorURL}}" rel=nofollow>
+						{{ .Author }}
+					</a>
 				{{ else }}
 					{{ .Author }}
 				{{ end }}
 			</span>
-			<time datetime="{{ .Published }}">{{ .Published | humanTime }}</time>
+			<time datetime="{{ .Published | rfc3999 }}">{{ .Published | humanTime }}</time>
 			<a class="wm-content" href="{{ .Source }}" rel=nofollow>
 				{{ if .Title }}
 					{{ .Title }}
