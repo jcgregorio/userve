@@ -46,6 +46,12 @@ var (
 			}
 			return t.Format(time.RFC3339)
 		},
+		"trunc": func(s string) string {
+			if len(s) > 200 {
+				return s[:200] + "..."
+			}
+			return s
+		},
 	}).Parse(`
 	<section id=webmention>
 	<h3>WebMentions</h3>
@@ -67,17 +73,29 @@ var (
 			<time datetime="{{ .Published | rfc3999 }}">{{ .Published | humanTime }}</time>
 			<a class="wm-content" href="{{ .Source }}" rel=nofollow>
 				{{ if .Title }}
-					{{ .Title }}
+					{{ .Title | trunc }}
 				{{ else }}
-					{{ .Source }}
+					{{ .Source | trunc }}
 				{{ end }}
 			</a>
 	{{ end }}
 	</section>
 `))
 
-	triageTemplate *template.Template
-	triageSource   = fmt.Sprintf(`<!DOCTYPE html>
+	triageTemplate = template.Must(template.New("triage").Funcs(template.FuncMap{
+		"trunc": func(s string) string {
+			if len(s) > 80 {
+				return s[:80] + "..."
+			}
+			return s
+		},
+		"humanTime": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return " • " + units.HumanDuration(time.Now().Sub(t)) + " ago"
+		},
+	}).Parse(fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <title></title>
@@ -91,7 +109,7 @@ var (
 		  #webmentions {
 				display: grid;
 				padding: 1em;
-				grid-template-columns: 5em 1fr 1fr 1fr;
+				grid-template-columns: 5em 10em 1fr;
 				grid-column-gap: 10px;
 				grid-row-gap: 6px;
 			}
@@ -114,9 +132,11 @@ var (
 			<option value="spam" {{if eq .State "spam" }}selected{{ end }} >Spam</option>
 			<option value="untriaged" {{if eq .State "untriaged" }}selected{{ end }} >Untriaged</option>
 		</select>
-		<a href="{{ .Source }}">{{ .Source }}</a>
-		<a href="{{ .Target }}">{{ .Target }}</a>
 		<span>{{ .TS | humanTime }}</span>
+		<div>
+		  <div>Source: <a href="{{ .Source }}">{{ .Source | trunc }}</a></div>
+			<div>Target: <a href="{{ .Target }}">{{ .Target | trunc }}</a></div>
+		</div>
   {{end}}
   </div>
 	<div><a href="/u/triage?offset={{.Offset}}">Next</a></div>
@@ -140,7 +160,7 @@ var (
 	 });
 	</script>
 </body>
-</html>`, CLIENT_ID)
+</html>`, CLIENT_ID)))
 )
 
 func makeStaticHandler() func(http.ResponseWriter, *http.Request) {
@@ -320,11 +340,6 @@ func main() {
 		}
 
 	}
-	triageTemplate = template.Must(template.New("triage").Funcs(template.FuncMap{
-		"humanTime": func(t time.Time) string {
-			return units.HumanDuration(time.Now().Sub(t)) + " ago."
-		},
-	}).Parse(triageSource))
 	cache, err = lru.New(5000)
 	if err != nil {
 		glog.Fatalf("Failed to initialize log cache: %s", err)

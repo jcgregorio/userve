@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -199,6 +201,7 @@ func (m *Mention) FastValidate() error {
 }
 
 func (m *Mention) SlowValidate(c *http.Client) error {
+	glog.Infof("SlowValidate: %q", m.Source)
 	resp, err := c.Get(m.Source)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve source: %s", err)
@@ -232,6 +235,10 @@ func (m *Mention) ParseMicroformats(r io.Reader, urlToImageReader UrlToImageRead
 		return
 	}
 	data := microformats.Parse(r, u)
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err == nil {
+		glog.Infof("JSON: %q\n", string(b))
+	}
 	findHEntry(context.Background(), urlToImageReader, m, data.Items)
 	// Find an h-entry with the m.Target.
 }
@@ -391,11 +398,16 @@ func firstPropAsString(uf *microformats.Microformat, key string) string {
 func findHEntry(ctx context.Context, u2r UrlToImageReader, m *Mention, items []*microformats.Microformat) {
 	for _, it := range items {
 		if in("h-entry", it.Type) {
-			entryURL := firstPropAsString(it, "url")
-			if entryURL != "" && entryURL != m.Source {
-				return
-			}
 			m.Title = firstPropAsString(it, "name")
+			if strings.HasPrefix(m.Title, "tag:twitter") {
+				m.Title = "Twitter"
+				if firstPropAsString(it, "like-of") != "" {
+					m.Title += " Like"
+				}
+				if firstPropAsString(it, "repost-of") != "" {
+					m.Title += " Repost"
+				}
+			}
 			if t, err := time.Parse(time.RFC3339, firstPropAsString(it, "published")); err == nil {
 				m.Published = t
 			}
