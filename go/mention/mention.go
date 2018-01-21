@@ -245,6 +245,7 @@ func (m *Mention) ParseMicroformats(r io.Reader, urlToImageReader UrlToImageRead
 
 func VerifyQueuedMentions(c *http.Client) {
 	queued := GetQueued(context.Background())
+	glog.Infof("About to slow verify %d queud mentions.", len(queued))
 	for _, m := range queued {
 		glog.Infof("Verifying queued webmention from %q", m.Source)
 		if m.SlowValidate(c) == nil {
